@@ -8,6 +8,7 @@ struct PriceLevel;
 
 struct Order {
     OrderId id;
+    Timestamp timestamp;
     Side side;
     Price price;
     Quantity initial_qty;

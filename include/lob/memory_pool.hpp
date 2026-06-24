@@ -12,7 +12,8 @@ namespace lob {
 template <typename T, std::size_t Capacity = 1000000>
 class MemoryPool {
 private:
-    std::unique_ptr<std::byte[], void(*)(void*)> storage;
+    using FreeDeleter = void(*)(void*);
+    std::unique_ptr<std::byte[], FreeDeleter> storage;
     std::vector<std::size_t> free_list;
     std::size_t bump_pointer = 0;
 

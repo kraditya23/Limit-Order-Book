@@ -7,6 +7,7 @@ namespace lob {
 struct PriceLevel {
     Price price;
     Quantity total_volume = 0; // Sum of remaining qty of all orders at this level
+    uint32_t order_count = 0;
 
     // Intrusive doubly linked list of orders(FIFO)
     // head_order is the oldest order
