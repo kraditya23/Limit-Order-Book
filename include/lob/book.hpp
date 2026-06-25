@@ -23,4 +23,6 @@ struct OrderBook {
     MemoryPool<PriceLevel, LEVEL_POOL_CAPACITY> level_pool;
 };
 
+void add_order(OrderBook &book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts);
+
 } // namespace lob

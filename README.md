@@ -24,8 +24,8 @@ make
 | 1 | Scaffolding — CMake, core headers | Done |
 | 2 | Standalone AVL tree + stress test | Done |
 | 3 | Memory pool | Done |
-| 4 | `add_order` — book insertion, level_map + AVL sync | In progress |
-| 5 | `cancel_order` — O(1) removal via order_map | Pending |
+| 4 | `add_order` — book insertion, level_map + AVL sync | Done |
+| 5 | `cancel_order` — O(1) removal via order_map | Current |
 | 6 | `modify_order` — qty reduction / price-time priority | Pending |
 | 7 | Market order matching / sweep logic | Pending |
 | 8 | GoogleTest suite | Pending |
