@@ -94,6 +94,60 @@ void insert_level (OrderBook& book, PriceLevel*& tree_root, PriceLevel* level) {
     book.level_map[level->price] = level;
 }
 
+void remove_level (OrderBook& book, PriceLevel*& tree_root, PriceLevel* target) {
+    // node = the node physically unlinked from the tree structure
+    PriceLevel* node;
+    if (!target->left || !target->right) {
+        node = target;
+    } else {
+        node = target->right;
+        while (node->left) node = node->left;
+    }
+
+    // node has at most one child (right only)
+    PriceLevel* child = node->left ? node->left : node->right;
+
+    // splice the node out
+    if (child) child->parent = node->parent;
+
+    PriceLevel* start_rebalance;
+    if (!node->parent) {
+        tree_root = child;
+        start_rebalance = nullptr;
+    } else {
+        if (node == node->parent->left) node->parent->left = child;
+        else node->parent->right = child;
+        start_rebalance = node->parent;
+    }
+
+    // two children case: move successor into target's structural position
+    if (node != target) {
+        if (start_rebalance == target) start_rebalance = node; // since target will be deleted and replaced by node
+
+        node->parent = target->parent;
+        node->left = target->left;
+        node->right = target->right;
+
+        if (!target->parent) tree_root = node;
+        else if (target == target->parent->left) target->parent->left = node;
+        else target->parent->right = node;
+
+        if (target->left) target->left->parent = node;
+        if (target->right) target->right->parent = node;
+    }
+
+    // rebalance upward from where the physical removal happened
+    PriceLevel* cur = start_rebalance;
+    while (cur) {
+        update_height(cur);
+        rebalance(tree_root, cur);
+        cur = cur->parent;
+    }
+
+    book.level_map.erase(target->price);
+    book.level_pool.deallocate(target);
+}
+
 } // anonymous namespace
 
 void add_order (OrderBook& book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts) {
@@ -134,6 +188,35 @@ void add_order (OrderBook& book, OrderId id, Side side, Price price, Quantity qt
 
     // 5. register in order map
     book.order_map[id] = order;
+}
+
+void cancel_order (OrderBook& book, OrderId id){
+    // 1. O(1) lookup
+    auto it = book.order_map.find(id);
+    if (it == book.order_map.end()) return;
+    Order* order = it->second;
+    PriceLevel* level = order->parent_level;
+
+    // 2. splice out the FIFO list
+    if (order->prev) order->prev->next = order->next;
+    else level->head_order = order->next;
+
+    if (order->next) order->next->prev = order->prev;
+    else level->tail_order = order->prev;
+
+    // 3. update the level stats
+    level->total_volume -= order->remaining_qty;
+    level->order_count--;
+
+    // 4. if level is now empty, remove it from the tree and map
+    if (level->order_count == 0) {
+        PriceLevel*& tree_root = (order->side == Side::Buy) ? book.bid_tree_root : book.ask_tree_root;
+        remove_level(book, tree_root, level);
+    }
+
+    // 5. free the order
+    book.order_map.erase(it);
+    book.order_pool.deallocate(order);
 }
 
 } // namespace lob

@@ -25,8 +25,8 @@ make
 | 2 | Standalone AVL tree + stress test | Done |
 | 3 | Memory pool | Done |
 | 4 | `add_order` — book insertion, level_map + AVL sync | Done |
-| 5 | `cancel_order` — O(1) removal via order_map | Current |
-| 6 | `modify_order` — qty reduction / price-time priority | Pending |
+| 5 | `cancel_order` — O(1) removal via order_map | Done |
+| 6 | `modify_order` — qty reduction / price-time priority | Current |
 | 7 | Market order matching / sweep logic | Pending |
 | 8 | GoogleTest suite | Pending |
 | 9 | Google Benchmark | Pending |
