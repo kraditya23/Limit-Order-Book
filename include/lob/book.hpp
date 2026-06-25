@@ -25,5 +25,6 @@ struct OrderBook {
 
 void add_order(OrderBook &book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts);
 void cancel_order(OrderBook& book, OrderId id);
+void modify_order(OrderBook& book, OrderId id, Price new_price, Quantity new_qty, Timestamp ts);
 
 } // namespace lob

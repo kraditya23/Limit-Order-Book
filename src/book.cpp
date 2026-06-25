@@ -219,4 +219,41 @@ void cancel_order (OrderBook& book, OrderId id){
     book.order_pool.deallocate(order);
 }
 
+// modify order flow:
+// new_qty == 0                             -> cancel only
+// new_price != old_price                   -> cancel + re-add
+// new_qty > remaining_qty                  -> cancel + re-add
+// new_qty == remaining_qty (same price)    -> no operation
+// new_qty < remaining_qty (same price)     -> in place reduction
+void modify_order (OrderBook& book, OrderId id, Price new_price, Quantity new_qty, Timestamp ts) {
+    auto it = book.order_map.find(id);
+    if (it == book.order_map.end()) return;
+    Order* order = it->second;
+
+    // case 1: new_qty == 0  -> cancel
+    if (new_qty == 0) {
+        cancel_order(book, id);
+        return;
+    }
+
+    // case 2: new_price != old_price     -> cancel + re-add
+    // or case 3: new_qty > remainig_qty  -> cancel + re-add
+    if (new_price != order->price || new_qty > order->remaining_qty) {
+        Side side = order->side;    // saving before cancel order frees the order
+        cancel_order(book, id);
+        add_order(book, id, side, new_price, new_qty, ts);
+        return;
+    }
+
+    // case 4: new_qty == remaining_qty (same price) -> do nothing
+
+    // case 5: new_qty < remaining_qty (same price) -> in place reduction
+    if (new_qty < order->remaining_qty) {
+        Quantity delta = order->remaining_qty - new_qty;
+        order->remaining_qty = new_qty;
+        order->parent_level->total_volume -= delta;
+        return;
+    }
+}
+
 } // namespace lob
