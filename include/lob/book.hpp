@@ -17,7 +17,8 @@ struct OrderBook {
 
     // fast lookup table for O(1) cancellations and modifications
     std::unordered_map<OrderId, Order*> order_map;
-    std::unordered_map<Price, PriceLevel*> level_map;
+    std::unordered_map<Price, PriceLevel*> bid_level_map;
+    std::unordered_map<Price, PriceLevel*> ask_level_map; 
 
     MemoryPool<Order, ORDER_POOL_CAPACITY> order_pool;
     MemoryPool<PriceLevel, LEVEL_POOL_CAPACITY> level_pool;

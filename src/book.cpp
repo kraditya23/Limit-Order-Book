@@ -69,7 +69,7 @@ void rebalance (PriceLevel*& tree_root, PriceLevel* node) {
     }
 }
 
-void insert_level (OrderBook& book, PriceLevel*& tree_root, PriceLevel* level) {
+void insert_level (PriceLevel*& tree_root, PriceLevel* level, std::unordered_map<Price, PriceLevel*>& level_map) {
     // BST walk to find the insertion point
     PriceLevel* cur = tree_root;
     PriceLevel* parent = nullptr;
@@ -91,10 +91,10 @@ void insert_level (OrderBook& book, PriceLevel*& tree_root, PriceLevel* level) {
         cur = cur->parent;
     }
 
-    book.level_map[level->price] = level;
+    level_map[level->price] = level;
 }
 
-void remove_level (OrderBook& book, PriceLevel*& tree_root, PriceLevel* target) {
+void remove_level (OrderBook& book, PriceLevel*& tree_root, PriceLevel* target, std::unordered_map<Price, PriceLevel*>& level_map) {
     // node = the node physically unlinked from the tree structure
     PriceLevel* node;
     if (!target->left || !target->right) {
@@ -144,13 +144,15 @@ void remove_level (OrderBook& book, PriceLevel*& tree_root, PriceLevel* target) 
         cur = cur->parent;
     }
 
-    book.level_map.erase(target->price);
+    level_map.erase(target->price);
     book.level_pool.deallocate(target);
 }
 
 } // anonymous namespace
 
 void add_order (OrderBook& book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts) {
+    auto& level_map = (side == Side::Buy) ? book.bid_level_map : book.ask_level_map;
+
     // 1. allocate and fill order
     Order* order = book.order_pool.allocate();
     order->id = id;
@@ -162,14 +164,14 @@ void add_order (OrderBook& book, OrderId id, Side side, Price price, Quantity qt
 
     // 2. find or create the price level
     PriceLevel* level = nullptr;
-    auto it = book.level_map.find(price);
-    if (it != book.level_map.end()) {
+    auto it = level_map.find(price);
+    if (it != level_map.end()) {
         level = it->second;
     } else {
         level = book.level_pool.allocate();
         level->price = price;
         PriceLevel*& tree_root = (side == Side::Buy) ? book.bid_tree_root : book.ask_tree_root;
-        insert_level(book, tree_root, level);
+        insert_level(tree_root, level, level_map);
     }
 
     // 3. append to tail of fifo sequence
@@ -196,6 +198,9 @@ void cancel_order (OrderBook& book, OrderId id){
     if (it == book.order_map.end()) return;
     Order* order = it->second;
     PriceLevel* level = order->parent_level;
+    Side side = order->side;
+
+    auto& level_map = (side == Side::Buy) ? book.bid_level_map : book.ask_level_map;
 
     // 2. splice out the FIFO list
     if (order->prev) order->prev->next = order->next;
@@ -211,7 +216,7 @@ void cancel_order (OrderBook& book, OrderId id){
     // 4. if level is now empty, remove it from the tree and map
     if (level->order_count == 0) {
         PriceLevel*& tree_root = (order->side == Side::Buy) ? book.bid_tree_root : book.ask_tree_root;
-        remove_level(book, tree_root, level);
+        remove_level(book, tree_root, level, level_map);
     }
 
     // 5. free the order
