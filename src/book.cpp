@@ -1,5 +1,6 @@
 #include "lob/book.hpp"
 #include <algorithm>
+#include <limits>
 
 namespace lob {
 namespace { // <- anonymous namespace (makes these helpers file local)
@@ -148,6 +149,65 @@ void remove_level (OrderBook& book, PriceLevel*& tree_root, PriceLevel* target, 
     book.level_pool.deallocate(target);
 }
 
+PriceLevel* find_min (PriceLevel* root) {
+    if (!root) return nullptr;
+    while (root->left) root = root->left;
+    return root;
+}
+
+PriceLevel* find_max(PriceLevel* root) {
+    if (!root) return nullptr;
+    while (root->right) root = root->right;
+    return root;
+}
+
+Quantity sweep (OrderBook& book, Side aggressor_side, OrderId taker_id, Price limit_price,
+                Quantity qty, Timestamp ts, std::vector<Trade>& trades) {
+    PriceLevel*& opp_tree = (aggressor_side == Side::Buy)
+                            ? book.ask_tree_root : book.bid_tree_root;
+    auto& opp_map = (aggressor_side == Side::Buy) 
+                    ? book.ask_level_map : book.bid_level_map;
+    
+    while (qty > 0) {
+        // best ask for market buy (find_min), best bid for market sell (find_max)
+        PriceLevel* level = (aggressor_side == Side::Buy) ? find_min(opp_tree) : find_max(opp_tree);
+
+        if (!level) break; // book exhausted
+
+        // limit price check (always passes for market orders)
+        if (aggressor_side == Side::Buy && level->price > limit_price) break;
+        if (aggressor_side == Side::Sell && level->price < limit_price) break;
+
+        // fill fifo at this level
+        Order* maker = level->head_order;
+        while (maker && qty > 0) {
+            Quantity fill = std::min(qty, maker->remaining_qty);
+            trades.push_back({maker->id, taker_id, level->price, fill, ts});
+            maker->remaining_qty -= fill;
+            level->total_volume -= fill;
+            qty -= fill;
+
+            if (maker->remaining_qty == 0) {
+                Order* next = maker->next;
+                level->head_order = next;
+                if (next) next->prev = nullptr;
+                else level->tail_order = nullptr;
+
+                level->order_count--;
+                book.order_map.erase(maker->id);
+                book.order_pool.deallocate(maker);
+                maker = next;
+            }
+        }
+
+        // if level is drained, remove it from the tree + map
+        if (level->order_count == 0) {
+            remove_level(book, opp_tree, level, opp_map);
+        }
+    }
+    return qty;
+}
+
 } // anonymous namespace
 
 void add_order (OrderBook& book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts) {
@@ -259,6 +319,26 @@ void modify_order (OrderBook& book, OrderId id, Price new_price, Quantity new_qt
         order->parent_level->total_volume -= delta;
         return;
     }
+}
+
+std::vector<Trade> market_order (OrderBook& book, OrderId id, Side side, Quantity qty, Timestamp ts) {
+    std::vector<Trade> trades;
+
+    Price limit = (side == Side::Buy) ? std::numeric_limits<Price>::max() 
+                                      : std::numeric_limits<Price>::min();
+
+    sweep(book, side, id, limit, qty, ts, trades);
+    return trades;
+}
+
+Price best_bid (const OrderBook& book) {
+    PriceLevel* level = find_max(book.bid_tree_root);
+    return level ? level->price : std::numeric_limits<Price>::min();
+}
+
+Price best_ask (const OrderBook& book) {
+    PriceLevel* level = find_min(book.ask_tree_root);
+    return level ? level->price : std::numeric_limits<Price>::max();
 }
 
 } // namespace lob

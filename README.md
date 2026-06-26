@@ -27,7 +27,12 @@ make
 | 4 | `add_order` — book insertion, level_map + AVL sync | Done |
 | 5 | `cancel_order` — O(1) removal via order_map | Done |
 | 6 | `modify_order` — qty reduction / price-time priority | Done |
-| 7 | Market order matching / sweep logic | Current |
+| 7 | Market order matching / sweep logic | Done |
+| 7.1 | Crossing limit orders (`add_order` sweeps the opposite book before resting) | Current Stage |
+| 7.2 | Self-trade prevention | Pending |
+| 7.3 | Time-in-force (IOC-with-price, FOK, day-order expiry) | Pending |
+| 7.4 | Order validation/rejection at the API boundary | Pending |
+| 7.5 | Multi-instrument support (per-symbol book + router) | Pending |
 | 8 | GoogleTest suite | Pending |
 | 9 | Google Benchmark | Pending |
 | 10 | pybind11 Python bindings | Pending |

@@ -1,5 +1,6 @@
 #pragma once
 #include <unordered_map>
+#include <vector>
 #include "lob/types.hpp"
 #include "lob/order.hpp"
 #include "lob/level.hpp"
@@ -27,5 +28,12 @@ struct OrderBook {
 void add_order(OrderBook &book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts);
 void cancel_order(OrderBook& book, OrderId id);
 void modify_order(OrderBook& book, OrderId id, Price new_price, Quantity new_qty, Timestamp ts);
+
+// market order: sweeps opposite side, returns all fills. unfilled remainder is dropped (IOC)
+std::vector<Trade> market_order(OrderBook& book, OrderId id, Side side, Quantity qty, Timestamp ts);
+
+// best price queries: O(log n) tree traversal
+Price best_bid(const OrderBook& book);
+Price best_ask(const OrderBook& book);
 
 } // namespace lob
