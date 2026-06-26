@@ -28,8 +28,8 @@ make
 | 5 | `cancel_order` — O(1) removal via order_map | Done |
 | 6 | `modify_order` — qty reduction / price-time priority | Done |
 | 7 | Market order matching / sweep logic | Done |
-| 7.1 | Crossing limit orders (`add_order` sweeps the opposite book before resting) | Current Stage |
-| 7.2 | Self-trade prevention | Pending |
+| 7.1 | Crossing limit orders (`add_order` sweeps the opposite book before resting) | Done |
+| 7.2 | Self-trade prevention | Current Stage |
 | 7.3 | Time-in-force (IOC-with-price, FOK, day-order expiry) | Pending |
 | 7.4 | Order validation/rejection at the API boundary | Pending |
 | 7.5 | Multi-instrument support (per-symbol book + router) | Pending |
