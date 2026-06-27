@@ -210,12 +210,11 @@ Quantity sweep (OrderBook& book, Side aggressor_side, OrderId taker_id, Price li
 
 } // anonymous namespace
 
-std::vector<Trade> add_order (OrderBook& book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts) {
+void add_order (OrderBook& book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts, std::vector<Trade>& trades) {
     auto& level_map = (side == Side::Buy) ? book.bid_level_map : book.ask_level_map;
 
-    std::vector<Trade> trades;
     Quantity remaining = sweep(book, side, id, price, qty, ts, trades);
-    if (remaining == 0) return trades;
+    if (remaining == 0) return;
 
     // 1. allocate and fill order
     Order* order = book.order_pool.allocate();
@@ -255,7 +254,7 @@ std::vector<Trade> add_order (OrderBook& book, OrderId id, Side side, Price pric
     // 5. register in order map
     book.order_map[id] = order;
 
-    return trades;
+    return;
 }
 
 void cancel_order (OrderBook& book, OrderId id){
@@ -296,15 +295,15 @@ void cancel_order (OrderBook& book, OrderId id){
 // new_qty > remaining_qty                  -> cancel + re-add
 // new_qty == remaining_qty (same price)    -> no operation
 // new_qty < remaining_qty (same price)     -> in place reduction
-std::vector<Trade> modify_order (OrderBook& book, OrderId id, Price new_price, Quantity new_qty, Timestamp ts) {
+void modify_order (OrderBook& book, OrderId id, Price new_price, Quantity new_qty, Timestamp ts, std::vector<Trade>& trades) {
     auto it = book.order_map.find(id);
-    if (it == book.order_map.end()) return {};
+    if (it == book.order_map.end()) return;
     Order* order = it->second;
 
     // case 1: new_qty == 0  -> cancel
     if (new_qty == 0) {
         cancel_order(book, id);
-        return {};
+        return;
     }
 
     // case 2: new_price != old_price     -> cancel + re-add
@@ -312,7 +311,8 @@ std::vector<Trade> modify_order (OrderBook& book, OrderId id, Price new_price, Q
     if (new_price != order->price || new_qty > order->remaining_qty) {
         Side side = order->side;    // saving before cancel order frees the order
         cancel_order(book, id);  
-        return add_order(book, id, side, new_price, new_qty, ts);
+        add_order(book, id, side, new_price, new_qty, ts, trades);
+        return;
     }
 
     // case 4: new_qty == remaining_qty (same price) -> do nothing
@@ -322,20 +322,16 @@ std::vector<Trade> modify_order (OrderBook& book, OrderId id, Price new_price, Q
         Quantity delta = order->remaining_qty - new_qty;
         order->remaining_qty = new_qty;
         order->parent_level->total_volume -= delta;
-        return {};
+        return;
     }
-
-    return {};
 }
 
-std::vector<Trade> market_order (OrderBook& book, OrderId id, Side side, Quantity qty, Timestamp ts) {
-    std::vector<Trade> trades;
-
+void market_order (OrderBook& book, OrderId id, Side side, Quantity qty, Timestamp ts, std::vector<Trade>& trades) {
     Price limit = (side == Side::Buy) ? std::numeric_limits<Price>::max() 
                                       : std::numeric_limits<Price>::min();
 
     sweep(book, side, id, limit, qty, ts, trades);
-    return trades;
+    return;
 }
 
 Price best_bid (const OrderBook& book) {

@@ -25,12 +25,12 @@ struct OrderBook {
     MemoryPool<PriceLevel, LEVEL_POOL_CAPACITY> level_pool;
 };
 
-std::vector<Trade> add_order(OrderBook &book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts);
+void add_order(OrderBook &book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts, std::vector<Trade>& trades);
 void cancel_order(OrderBook& book, OrderId id);
-std::vector<Trade> modify_order(OrderBook& book, OrderId id, Price new_price, Quantity new_qty, Timestamp ts);
+void modify_order(OrderBook& book, OrderId id, Price new_price, Quantity new_qty, Timestamp ts, std::vector<Trade>& trades);
 
 // market order: sweeps opposite side, returns all fills. unfilled remainder is dropped (IOC)
-std::vector<Trade> market_order(OrderBook& book, OrderId id, Side side, Quantity qty, Timestamp ts);
+void market_order(OrderBook& book, OrderId id, Side side, Quantity qty, Timestamp ts, std::vector<Trade>& trades);
 
 // best price queries: O(log n) tree traversal
 Price best_bid(const OrderBook& book);

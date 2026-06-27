@@ -114,3 +114,7 @@ __pycache__/
 venv/
 env/
 .pytest_cache/
+
+#temp 
+bench/
+lob_benchmark
