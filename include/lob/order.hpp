@@ -22,4 +22,6 @@ struct Order {
     PriceLevel* parent_level = nullptr;
 };
 
+static_assert(sizeof(Order) == 64, "Order must stay exactly one 64-byte cache line");
+
 } // namespace lob

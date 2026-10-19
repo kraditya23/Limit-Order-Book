@@ -6,8 +6,7 @@ namespace lob {
 
 struct PriceLevel {
     Price price;
-    Quantity total_volume = 0; // Sum of remaining qty of all orders at this level
-    uint32_t order_count = 0;
+    uint64_t total_volume = 0; // Sum of remaining qty of all orders at this level
 
     // Intrusive doubly linked list of orders(FIFO)
     // head_order is the oldest order
@@ -20,6 +19,9 @@ struct PriceLevel {
     PriceLevel* left = nullptr;
     PriceLevel* right = nullptr;
     int height = 1;
+    uint32_t order_count = 0;
 };
+
+static_assert(sizeof(PriceLevel) == 64, "PriceLevel must stay exactly one 64-byte cache line");
 
 } // namespace lob
