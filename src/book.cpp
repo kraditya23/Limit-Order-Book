@@ -1,6 +1,7 @@
 #include "lob/book.hpp"
 #include <algorithm>
 #include <limits>
+#include <cassert>
 
 namespace lob {
 namespace { // <- anonymous namespace (makes these helpers file local)
@@ -210,34 +211,39 @@ Quantity sweep (OrderBook& book, Side aggressor_side, OrderId taker_id, Price li
 
 } // anonymous namespace
 
-void add_order (OrderBook& book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts, std::vector<Trade>& trades) {
-    auto& level_map = (side == Side::Buy) ? book.bid_level_map : book.ask_level_map;
+Status add_order (OrderBook& book, const OrderRequest& req, std::vector<Trade>& trades) {
+    // invalid requests
+    if (req.qty == 0) return Status::InvalidQty;
+    if (book.order_map.contains(req.id)) return Status::DuplicateId;
 
-    Quantity remaining = sweep(book, side, id, price, qty, ts, trades);
-    if (remaining == 0) return;
+    // mutate : from here onwards the book changes
+    auto& level_map = (req.side == Side::Buy) ? book.bid_level_map : book.ask_level_map;
 
-    // 1. allocate and fill order
+    Quantity remaining = sweep(book, req.side, req.id, req.price, req.qty, req.ts, trades);
+    if (remaining == 0) return Status::Ok;
+
+    // allocate and fill order
     Order* order = book.order_pool.allocate();
-    order->id = id;
-    order->timestamp = ts;
-    order->side = side;
-    order->price = price;
-    order->initial_qty = qty;
+    order->id = req.id;
+    order->timestamp = req.ts;
+    order->side = req.side;
+    order->price = req.price;
+    order->initial_qty = req.qty;
     order->remaining_qty = remaining;
 
-    // 2. find or create the price level
+    // find or create the price level
     PriceLevel* level = nullptr;
-    auto it = level_map.find(price);
+    auto it = level_map.find(req.price);
     if (it != level_map.end()) {
         level = it->second;
     } else {
         level = book.level_pool.allocate();
-        level->price = price;
-        PriceLevel*& tree_root = (side == Side::Buy) ? book.bid_tree_root : book.ask_tree_root;
+        level->price = req.price;
+        PriceLevel*& tree_root = (req.side == Side::Buy) ? book.bid_tree_root : book.ask_tree_root;
         insert_level(tree_root, level, level_map);
     }
 
-    // 3. append to tail of fifo sequence
+    // append to tail of fifo sequence
     order->parent_level = level;
     order->prev = level->tail_order;
     order->next = nullptr;
@@ -247,20 +253,20 @@ void add_order (OrderBook& book, OrderId id, Side side, Price price, Quantity qt
 
     level->tail_order = order;
 
-    // 4. update level stats
+    // update level stats
     level->total_volume += remaining;
     level->order_count++;
 
-    // 5. register in order map
-    book.order_map[id] = order;
+    // register in order map
+    book.order_map[req.id] = order;
 
-    return;
+    return Status::Ok;
 }
 
-void cancel_order (OrderBook& book, OrderId id){
+Status cancel_order (OrderBook& book, OrderId id){
     // 1. O(1) lookup
     auto it = book.order_map.find(id);
-    if (it == book.order_map.end()) return;
+    if (it == book.order_map.end()) return Status::UnknownId;
     Order* order = it->second;
     PriceLevel* level = order->parent_level;
     Side side = order->side;
@@ -287,51 +293,61 @@ void cancel_order (OrderBook& book, OrderId id){
     // 5. free the order
     book.order_map.erase(it);
     book.order_pool.deallocate(order);
+
+    return Status::Ok;
 }
 
 // modify order flow:
 // new_qty == 0                             -> cancel only
 // new_price != old_price                   -> cancel + re-add
 // new_qty > remaining_qty                  -> cancel + re-add
-// new_qty == remaining_qty (same price)    -> no operation
 // new_qty < remaining_qty (same price)     -> in place reduction
-void modify_order (OrderBook& book, OrderId id, Price new_price, Quantity new_qty, Timestamp ts, std::vector<Trade>& trades) {
-    auto it = book.order_map.find(id);
-    if (it == book.order_map.end()) return;
+// new_qty == remaining_qty (same price)    -> no operation
+Status modify_order (OrderBook& book, const ModifyRequest& req, std::vector<Trade>& trades) {
+    auto it = book.order_map.find(req.id);
+    if (it == book.order_map.end()) return Status::UnknownId;
     Order* order = it->second;
 
     // case 1: new_qty == 0  -> cancel
-    if (new_qty == 0) {
-        cancel_order(book, id);
-        return;
+    if (req.new_qty == 0) {
+        return cancel_order(book, req.id);
     }
 
     // case 2: new_price != old_price     -> cancel + re-add
-    // or case 3: new_qty > remainig_qty  -> cancel + re-add
-    if (new_price != order->price || new_qty > order->remaining_qty) {
+    // or case 3: new_qty > remaining_qty  -> cancel + re-add
+    if (req.new_price != order->price || req.new_qty > order->remaining_qty) {
         Side side = order->side;    // saving before cancel order frees the order
-        cancel_order(book, id);  
-        add_order(book, id, side, new_price, new_qty, ts, trades);
-        return;
+        [[maybe_unused]] Status cancelled = cancel_order(book, req.id);  
+        assert(cancelled == Status::Ok);    // id was found above -> cannot fail
+
+        Status added = add_order(book, {.id = req.id, .side = side, .price = req.new_price, .qty = req.new_qty, .ts = req.ts}, trades);
+        assert(added == Status::Ok);    // qty > 0 and id was just freed -> cannot be rejected
+
+        return added;
     }
 
-    // case 4: new_qty == remaining_qty (same price) -> do nothing
-
-    // case 5: new_qty < remaining_qty (same price) -> in place reduction
-    if (new_qty < order->remaining_qty) {
-        Quantity delta = order->remaining_qty - new_qty;
-        order->remaining_qty = new_qty;
+    // case 4: new_qty < remaining_qty (same price) -> in place reduction
+    if (req.new_qty < order->remaining_qty) {
+        Quantity delta = order->remaining_qty - req.new_qty;
+        order->remaining_qty = req.new_qty;
         order->parent_level->total_volume -= delta;
-        return;
     }
+
+    // case 5: new_qty == remaining_qty (same price) -> do nothing
+
+    return Status::Ok;
 }
 
-void market_order (OrderBook& book, OrderId id, Side side, Quantity qty, Timestamp ts, std::vector<Trade>& trades) {
-    Price limit = (side == Side::Buy) ? std::numeric_limits<Price>::max() 
+Status market_order (OrderBook& book, const OrderRequest& req, std::vector<Trade>& trades) {
+    // rejecting invalid orders
+    if (req.qty == 0) return Status::InvalidQty;
+    if (book.order_map.contains(req.id)) return Status::DuplicateId;
+
+    Price limit = (req.side == Side::Buy) ? std::numeric_limits<Price>::max() 
                                       : std::numeric_limits<Price>::min();
 
-    sweep(book, side, id, limit, qty, ts, trades);
-    return;
+    sweep(book, req.side, req.id, limit, req.qty, req.ts, trades);
+    return Status::Ok;
 }
 
 Price best_bid (const OrderBook& book) {

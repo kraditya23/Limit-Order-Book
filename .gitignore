@@ -115,5 +115,4 @@ env/
 .pytest_cache/
 
 #temp 
-bench/
 lob_benchmark

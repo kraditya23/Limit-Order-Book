@@ -25,12 +25,42 @@ struct OrderBook {
     MemoryPool<PriceLevel, LEVEL_POOL_CAPACITY> level_pool;
 };
 
-void add_order(OrderBook &book, OrderId id, Side side, Price price, Quantity qty, Timestamp ts, std::vector<Trade>& trades);
-void cancel_order(OrderBook& book, OrderId id);
-void modify_order(OrderBook& book, OrderId id, Price new_price, Quantity new_qty, Timestamp ts, std::vector<Trade>& trades);
+// outcome of every call that can change the book
+// [[nodiscard]] on the type : ignoring the returned Status is a warning (an error under -Werror)
+enum class [[nodiscard]] Status : uint8_t {
+    Ok,
+    DuplicateId,    // id collides with an order currently resting in the book
+    UnknownId,      // cancel/modify for an order that is not resting
+    InvalidQty      // qty == 0 on add/market
+};
 
-// market order: sweeps opposite side, returns all fills. unfilled remainder is dropped (IOC)
-void market_order(OrderBook& book, OrderId id, Side side, Quantity qty, Timestamp ts, std::vector<Trade>& trades);
+
+// RULE : every new field added later gets a default member initializer.
+// so that the existing call sites keep compiling
+struct OrderRequest {
+    OrderId id;
+    Side side;
+    Price price;        // ignored by market_order
+    Quantity qty;
+    Timestamp ts = 0;
+};
+
+// Cancel/replace of a resting order
+struct ModifyRequest {
+    OrderId id;
+    Price new_price;
+    Quantity new_qty;      // 0 = cancel order
+    Timestamp ts = 0;
+};
+
+// Contract: if the Status is not Ok, neither the book nor the 'trades' change
+// Trades are appended to 'trades', the caller decides when to clear it
+Status add_order(OrderBook &book, const OrderRequest& req, std::vector<Trade>& trades);
+Status cancel_order(OrderBook& book, OrderId id);
+Status modify_order(OrderBook& book, const ModifyRequest& req, std::vector<Trade>& trades);
+
+// market order: sweeps opposite side, appends all trades done. unfilled remainder is dropped (IOC)
+Status market_order(OrderBook& book, const OrderRequest& req, std::vector<Trade>& trades);
 
 // best price queries: O(log n) tree traversal
 Price best_bid(const OrderBook& book);
