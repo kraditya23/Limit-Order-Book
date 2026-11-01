@@ -1,13 +1,16 @@
-#include "tests/standalone_avl.hpp"
-#include <iostream>
-#include <vector>
-#include <random>
-#include <cassert>
+#include "standalone_avl.hpp"
+
+#include <gtest/gtest.h>
+
+#include <algorithm>
 #include <climits>
+#include <random>
+#include <vector>
 
 using namespace lob;
 
-// Recursive helper to strictly prove AVL invariants
+namespace {
+
 bool validate_avl_invariants(AVLNode* node, int min = INT_MIN, int max = INT_MAX) {
     if (!node) return true;
 
@@ -40,32 +43,30 @@ bool validate_avl_invariants(AVLNode* node, int min = INT_MIN, int max = INT_MAX
         return false;
     }
 
-    return validate_avl_invariants(node->left, min, node->key)
+    return validate_avl_invariants(node->left, min, node->key) 
         && validate_avl_invariants(node->right, node->key, max);
 }
 
-int main() {
+}// namespace 
+
+TEST(StandaloneAvl, ShuffledInsertThenDeleteKeepsInvariants) {
     StandaloneAVL tree;
     std::vector<int> keys;
-    for (int i = 0; i < 1000; ++i) keys.push_back(i);
+    for (int i = 0; i < 1000; i++) keys.push_back(i);
 
-    // Shuffle to ensure random insertion orders trigger all rotation cases
     std::mt19937 g(42);
-    std::shuffle(keys.begin(), keys.end(), g);
 
-    std::cout << "Inserting 1000 nodes...\n";
+    std::shuffle(keys.begin(), keys.end(), g);
     for (int key : keys) {
         tree.insert(key);
-        assert(validate_avl_invariants(tree.get_root()));
+        ASSERT_TRUE(validate_avl_invariants(tree.get_root())) << "after inserting " << key;
     }
 
-    std::cout << "Deleting 1000 nodes...\n";
     std::shuffle(keys.begin(), keys.end(), g);
     for (int key : keys) {
         tree.remove(key);
-        assert(validate_avl_invariants(tree.get_root()));
+        ASSERT_TRUE(validate_avl_invariants(tree.get_root())) << "after removing " << key;
     }
 
-    std::cout << "AVL Tree Stress Test Passed. No memory corruption detected.\n";
-    return 0;
+    EXPECT_EQ(tree.get_root(), nullptr);
 }

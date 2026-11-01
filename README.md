@@ -13,14 +13,14 @@ A limit order book and matching engine written in C++20. It implements price-tim
 
 ## Performance (preliminary)
 
-Single thread, 500,000 mixed operations on a book pre-filled with 100,000 resting orders across 5,000 price levels per side (40% resting adds, 10% crossing adds, 20% cancels, 20% modifies, 10% market orders). Median of 11 runs on an Apple M3 MacBook Air, Apple Clang 17, `-O3 -march=native`.
+Single thread, 500,000 mixed operations on a book pre-filled with 100,000 resting orders across 5,000 price levels per side (40% resting adds, 10% crossing adds, 20% cancels, 20% modifies, 10% market orders). Median of 13 runs on an Apple M3 MacBook Air, Apple Clang 17, `-O3 -march=native`.
 
-| Metric | Median | Range over 11 runs |
+| Metric | Median | Range over 13 runs |
 |---|---|---|
-| Throughput | 6.1 M ops/s | 5.0 – 6.8 M ops/s |
-| Mean time per operation | 163 ns | 148 – 202 ns |
-| p99 latency per operation | ≤ 542 ns | 458 – 625 ns |
-| p99.9 latency per operation | ≤ 959 ns | 833 – 1,083 ns |
+| Throughput | 6.6 M ops/s | 6.4 – 7.1 M ops/s |
+| Mean time per operation | 151 ns | 140 – 156 ns |
+| p99 latency per operation | ≤ 417 ns | 417 – 541 ns |
+| p99.9 latency per operation | ≤ 875 ns | 750 – 1,000 ns |
 
 Percentiles are upper bounds: each sample includes two clock reads, and the macOS timer resolves only ~42 ns. Methodology and known limitations are documented in [`bench/lob_benchmark.cpp`](bench/lob_benchmark.cpp); cycle-accurate tail latency on a pinned Linux core is on the roadmap.
 
@@ -75,14 +75,18 @@ Requires a C++20 compiler and CMake 3.14+. Builds with GCC 13, Clang 19 and Appl
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build                      # builds the lob_core static library
+cmake --build build
 ```
 
-Interim benchmark harness and AVL stress test:
+Run the tests (GoogleTest is fetched automatically during configuration):
 
 ```bash
-g++ -std=c++20 -O3 -march=native -DNDEBUG -Iinclude src/book.cpp bench/lob_benchmark.cpp -o lob_benchmark
-g++ -std=c++20 -O2 -I. tests/standalone_avl.cpp tests/test_standalone.cpp -o avl_test
+cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug -DLOB_SANITIZE=ON
+cmake --build build-debug
+(cd build-debug && ctest --output-on-failure)
+```
+
+Options: `LOB_BUILD_TESTS` (ON), `LOB_SANITIZE` (OFF; AddressSanitizer + UBSan), `LOB_NATIVE` (ON; `-march=native` in Release), `LOB_BUILD_INTERIM_BENCH` (OFF; builds `bench/` as `lob_interim_bench`).
 ```
 
 ## Project layout

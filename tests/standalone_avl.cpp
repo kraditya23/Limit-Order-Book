@@ -1,4 +1,4 @@
-#include "tests/standalone_avl.hpp"
+#include "standalone_avl.hpp"
 
 namespace lob {
 
