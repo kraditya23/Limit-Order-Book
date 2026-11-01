@@ -87,7 +87,7 @@ cmake --build build-debug
 ```
 
 Options: `LOB_BUILD_TESTS` (ON), `LOB_SANITIZE` (OFF; AddressSanitizer + UBSan), `LOB_NATIVE` (ON; `-march=native` in Release), `LOB_BUILD_INTERIM_BENCH` (OFF; builds `bench/` as `lob_interim_bench`).
-```
+
 
 ## Project layout
 
